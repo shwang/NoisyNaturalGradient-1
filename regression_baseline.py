@@ -2,15 +2,16 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-from misc.utils import get_logger, get_args, makedirs
-from misc.config import process_config
-from regression.misc.data_loader import generate_data_loader
-from regression.train import Trainer as RegressionTrainer
-from regression.model import Model as RegressionModel
-
 import tensorflow as tf
 import numpy as np
 import os
+
+from nng.misc.utils import get_logger, get_args, makedirs
+from nng.misc.config import process_config
+from nng.regression.misc.data_loader import generate_data_loader
+from nng.regression.train import Trainer as RegressionTrainer
+from nng.regression.model import Model as RegressionModel
+
 
 _REGRESSION_INPUT_DIM = {
     "concrete": [8],

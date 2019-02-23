@@ -1,19 +1,20 @@
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
-
-from misc.utils import get_logger, get_args, makedirs
-from misc.config import process_config
-from classification.misc.data_loader import load_pytorch
-from regression.misc.data_loader import generate_data_loader
-from classification.train import Trainer as ClassificationTrainer
-from regression.train import Trainer as RegressionTrainer
-from classification.model import Model as ClassificationModel
-from regression.model import Model as RegressionModel
-
-import tensorflow as tf
-import numpy as np
+import inspect
 import os
+
+import numpy as np
+import tensorflow as tf
+
+from nng.misc.utils import get_logger, get_args, makedirs, NNG_DIR
+from nng.misc.config import process_config
+from nng.classification.misc.data_loader import load_pytorch
+from nng.regression.misc.data_loader import generate_data_loader
+from nng.classification.train import Trainer as ClassificationTrainer
+from nng.regression.train import Trainer as RegressionTrainer
+from nng.classification.model import Model as ClassificationModel
+from nng.regression.model import Model as RegressionModel
 
 
 _CLASSIFICATION_INPUT_DIM = {
@@ -54,11 +55,10 @@ def main():
     makedirs(config.checkpoint_dir)
 
     # set logger
-    path = os.path.dirname(os.path.abspath(__file__))
-    path1 = os.path.join(path, 'classification/model.py')
-    path2 = os.path.join(path, 'classification/train.py')
-    path3 = os.path.join(path, 'regression/model.py')
-    path4 = os.path.join(path, 'regression/train.py')
+    path1 = os.path.join(NNG_DIR, 'classification/model.py')
+    path2 = os.path.join(NNG_DIR, 'classification/train.py')
+    path3 = os.path.join(NNG_DIR, 'regression/model.py')
+    path4 = os.path.join(NNG_DIR, 'regression/train.py')
     logger = get_logger('log', logpath=config.summary_dir+'/',
                         filepath=os.path.abspath(__file__), package_files=[path1, path2, path3, path4])
 
