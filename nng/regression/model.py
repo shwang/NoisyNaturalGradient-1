@@ -48,7 +48,7 @@ class Model(BaseModel):
         self.log_py_xw = None
         self.kl = None
         self.y_pred = None
-        self.y = None
+        self.y = None   # Model output (scalar).
         self.loss_prec = None
         self.alpha = None
         self.beta = None
@@ -86,33 +86,40 @@ class Model(BaseModel):
                                      std_y_train=self.config.std_train)
 
         elif self.layer_type == "mvg":
-            learn = BayesianLearning([inputs.shape[-1], 50, 1], [MVGLayer] * 2, [{}] * 2,
-                                     {}, tf.nn.relu, NormalOutSample,
-                                     self.inputs, self.targets, self.n_particles,
-                                     std_y_train=self.config.std_train)
+            learn = BayesianLearning(
+                    layer_sizes=[inputs.shape[-1], 50, 1],
+                    layer_types=[MVGLayer] * 2,
+                    layer_params=[{}] * 2,
+                    out_params={},
+                    activation_fn=tf.nn.relu,
+                    outsample=NormalOutSample,
+                    x=self.inputs,
+                    y=self.targets,
+                    n_particles=self.n_particles,
+                    std_y_train=self.config.std_train)
 
         else:
             raise NotImplementedError()
 
+        # Prob targets given inputs, variational weights.
         log_py_xw = learn.log_py_xw
         kl = learn.kl
         lower_bound = tf.reduce_mean(log_py_xw - self.config.kl * kl / self.n_data)
-
-        log_alpha, log_beta = tf.trainable_variables()[-2:]
-        alpha_ = tf.exp(log_alpha)
-        beta_ = tf.exp(log_beta)
+#### Add prec KL divergence loss.
+        # log_alpha, log_beta = tf.trainable_variables()[-2:]  # Ewww
+        outsample = learn._net._outsample
+        alpha_ = outsample.q_alpha
+        beta_ = outsample.q_beta
+        # alpha_ = tf.exp(log_alpha)
+        # beta_ = tf.exp(log_beta)
         y_obs = tf.tile(tf.expand_dims(self.targets, 0), [self.n_particles, 1])
         h_pred = tf.squeeze(learn.h_pred, 2)
         loss_prec = 0.5 * (tf.stop_gradient(tf.reduce_mean((y_obs - h_pred) ** 2)) *
                            alpha_ / beta_ - (tf.digamma(alpha_) - tf.log(beta_ + 1e-10)))
 
         lower_bound = lower_bound - tf.reduce_mean(loss_prec)
+###################
         self.lower_bound = lower_bound
-
-        vars = []
-        for var in tf.trainable_variables():
-            if 'log' in var.name:
-                vars.append(var)
 
         infer = []
         qws = [learn.qws['w' + str(i)].tensor for i in range(len(learn.qws))]
@@ -126,22 +133,28 @@ class Model(BaseModel):
         s = [get_collection("s0"), get_collection("s1")]
 
         if self.config.true_fisher:
+            # Take gradient with y=target and the rest of the model sampled.
             sampled_log_prob = learn.sampled_log_prob
             s_grads = tf.gradients(tf.reduce_sum(sampled_log_prob), s)
         else:
+            # Take gradient with y sampled along with the model.
             s_grads = tf.gradients(tf.reduce_sum(log_py_xw), s)
+        # XXX: I believe that for IRD, not true_fisher is meaningless.
+        # Because there is no target, we can only sample "y".
 
         scale_update_ops = []
         basis_update_ops = []
         for l, w, w_grad, a, s_grad in zip(layers, qws, w_grads, activations, s_grads):
+            # Adds the regular KFAC update.
             infer = infer + l.update(w, w_grad, a, s_grad)
             if self.layer_type == "emvg":
                 scale_update_ops = scale_update_ops + l.update_scale(w, w_grad, a, s_grad)
                 basis_update_ops = basis_update_ops + l.update_basis(w, w_grad, a, s_grad)
 
         optimizer = tf.train.AdamOptimizer(self.config.learning_rate)
-        grads = optimizer.compute_gradients(-lower_bound, vars)
-        infer = infer + [optimizer.apply_gradients(grads)]
+        prec_vars = [outsample.prec_logalpha, outsample.prec_logbeta]
+        prec_grads = optimizer.compute_gradients(-lower_bound, prec_vars)
+        infer = infer + [optimizer.apply_gradients(prec_grads)]
 
         self.train_op = infer
         self.init_ops = tf.group(init_ops) if init_ops != [] else None

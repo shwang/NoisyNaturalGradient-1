@@ -50,7 +50,7 @@ class Layer(object):
 
 class NormalPrior(Layer):
     """ The :class: `NormalPrior` is the inherited class from :class: `Layer`. Representing
-    layers with normal distribution priors.
+    layers with normal distribution priors with diagonal covariances.
 
     :param n_in: int.
     :param n_out: int.
@@ -100,6 +100,10 @@ class NormalPrior(Layer):
             return self._pws
 
 
+# Everything inherits from NormalPrior, which describes a normal distribution
+# with diagonal covariance. The diagonal covariance describes the prior over
+# layer weights, not the actual variational distribution, which could be
+# either diagonal or matrix-variate (as in MVG and EMVG Layer).
 class FeedForward(NormalPrior):
     """ The :class: `NormalPrior` is the inherited class from :class: `Layer`. Representing
     layers with normal distribution priors.
@@ -114,6 +118,8 @@ class FeedForward(NormalPrior):
         super(FeedForward, self).__init__(n_in, n_out, w_name, params)
 
     def forward(self, inputs):
+        """ Matmuls the inputs with weights sampled from the prior
+        distribution (Which is a diagonal gaussian). """
         inputs = tf.concat(
             [inputs,
              tf.ones(tf.concat([tf.shape(inputs)[:-1], [1]], axis=0))], axis=-1)

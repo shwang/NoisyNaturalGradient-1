@@ -83,7 +83,8 @@ class BayesianNetwork(object):
         return n
 
     def _forward(self, inputs, n_particles):
-        """ Forward the inputs through the network.
+        """ Forward the inputs through the network, sampling the weights
+            from the prior distribution, not the variational distribution.
         :param inputs: tensor of shape [batch_size, n_x] (n_x = self.layer_sizes[0])
         :param n_particles: tensor. Number of samples.
         :return: tensor of shape [n_particles, batch_size]
@@ -105,11 +106,14 @@ class BayesianNetwork(object):
         return h
 
     def predict(self, inputs, n_particles):
-        """ Forward the inputs through the network and get the outputs.
+        """ Forward the inputs through the network and get the outputs. (Weights
+            are sampled from the prior distribution, not the variational
+            distribution.
         :param inputs: tensor of shape [batch_size, n_x] (n_x = self.layer_sizes[0])
         :param n_particles: tensor. Number of samples.
-        :return output: tensor of shape [n_particles, batch_size]
-        :return h: tensor of shape [n_particles, batch_size, 1]. Finally hidden layer.
+        :return output: tensor of shape [n_particles, batch_size]. A Gaussian
+          sample with mean equal to the neural network.
+        :return h: tensor of shape [n_particles, batch_size, 1]. Final hidden layer.
         """
         h = self._forward(inputs, n_particles)
         output = self.outsample.forward(h)
@@ -132,12 +136,17 @@ class BayesianLearning(object):
         self._x = x
         self._y = y
 
+        # Holds all the string keys of variational weights. Seems to be
+        # the same as `list(self._qws)`, with reordering.
         self._q_names = []
-        self._qws = {}
+        # Holds all the parameters of the variational distribution.
+        self._qws = {}  # Dict[String -> StochasticTensor].
         with zs.BayesianNet() as variational:
             for l in self._net.layers:
                 if isinstance(l, FeedForward):
                     self._q_names.append(l.w_name)
+                    # Calling .qws() builds and returns a StochasticTensor
+                    # in this BayesNet context corresponding to somehting.
                     self._qws.update({l.w_name: l.qws(self.n_particles)})
 
             if hasattr(self._net.outsample, 'qs'):
@@ -156,6 +165,25 @@ class BayesianLearning(object):
         else:
             self._qs = self._qws
 
+        # `self._qs` is now a Dictionary that maps each StochasticTensor name in
+        # `variational` to its StochasticTensor. Perfect for building an
+        # observation dictionary where everything variational parameter is
+        # observed.
+
+        """
+        In the case of Regression problem,
+           * y_pred != h_pred. (Since we outsample y_pred from a Normal
+                                      distribution).
+           * Also, by default we should observe {'y': tiled(target)}.
+           * log_py_xw and sampled_log_prob come from evaluating zs log prob
+                    of model.get("y"), (either observed y or sampled y).
+        In the case of IRD problem,
+           * y_pred == h_pred? (Since there is no outsample before loss)
+           * log_py_xw and sampled_log_prob come from evaluating a Tensor
+                   representing IRD loss. We should still observe model
+                   parameters as variational samples.
+        """
+
         @zs.reuse('buildnet')
         def buildnet(observed):
             """ Get the BayesianNet instance and output of the bayesian neural network with some
@@ -172,7 +200,7 @@ class BayesianLearning(object):
         # BayesianNet instance with every stochastic node observed.
         model, dist, _ = self.buildnet(zs.merge_dicts(self._qs, {'y': y_obs}))
         self._model = model
-        self._dist = dist
+        self._dist = dist  # = model.outputs("y_pred")
         self._kwargs = kwargs
 
     @property

@@ -125,7 +125,7 @@ class Trainer(BaseTrain):
             feed_dict = {
                 self.model.inputs: x,
                 self.model.targets: y,
-                self.model.n_particles: self.config.train_particles,
+                self.model.n_particles: self.config.test_particles,
                 self.model.alpha: self.alpha,
                 self.model.beta: self.beta,
                 self.model.omega: self.omega

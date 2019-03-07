@@ -91,14 +91,14 @@ class NormalOutSample(OutSample):
         :param n_particles: tensor. Number of samples.
         :return: tensor of shape [n_particles, 1]. Samples of precision.
         """
-        prec_logalpha = tf.get_variable(
+        self.prec_logalpha = tf.get_variable(
             'q_prec_logalpha', shape=[1],
             initializer=tf.constant_initializer(np.log(6.)))
-        prec_logbeta = tf.get_variable(
+        self.prec_logbeta = tf.get_variable(
             'q_prec_logbeta', shape=[1],
             initializer=tf.constant_initializer(np.log(6.)))
-        self._q_alpha = tf.exp(prec_logalpha)
-        self._q_beta = tf.exp(prec_logbeta)
+        self._q_alpha = tf.exp(self.prec_logalpha)
+        self._q_beta = tf.exp(self.prec_logbeta)
         self._q_prec = zs.Gamma(
             'y_prec', self._q_alpha, self._q_beta,
             n_samples=n_particles, group_ndims=1)
@@ -121,6 +121,10 @@ class NormalOutSample(OutSample):
         return self._q_beta
 
     def forward(self, mean):
+        """Samples from the normal distribution centered at the provided
+        `mean` and with precision drawn from the prior Gamma distribution
+        (`self.ps`).
+        """
         mean = tf.squeeze(mean, [-1])
         prec = self.ps(tf.shape(mean)[0])
         prec = tf.stop_gradient(prec)
