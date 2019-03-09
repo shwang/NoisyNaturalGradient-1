@@ -9,8 +9,8 @@ from torch.utils.data import Dataset, DataLoader
 
 from nng.misc.utils import NNG_DIR
 
-load_regression_data = lambda name: generate_data_loader(
-        data_path="regression/data", dataset=name)
+# load_regression_data = lambda name: generate_data_loader(
+#         data_path="regression/data", dataset=name)
 
 
 def generate_data_loader(config, seed=0, delimiter=None, dtype=np.float32):

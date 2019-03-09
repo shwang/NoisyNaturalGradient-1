@@ -342,7 +342,7 @@ class DMatrixVariateNormal(Distribution):
         return log_prob
 
     def _prob(self, given):
-        return tf.exp(self._log_prob(self, given))
+        return tf.exp(self._log_prob(given))
 
 
 class EigenMultivariateNormal(Distribution):

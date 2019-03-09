@@ -12,6 +12,7 @@ class BaseModel:
         self.global_step_tensor = None
         # Init the global step.
         self.init_global_step()
+        self.saver = None
 
     def save(self, sess):
         """ Saves the checkpoint in the path defined in the config file.
