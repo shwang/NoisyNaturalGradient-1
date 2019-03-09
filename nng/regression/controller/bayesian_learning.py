@@ -36,6 +36,7 @@ class BayesianNetwork(object):
         self._activation_fn = activation_fn
         self.layers = []
         self.stochastic_names = []
+        self._kl_weights = []
         if not ((len(layer_sizes) == len(layer_types) + 1) and (len(layer_types) == len(layer_params))):
             raise ValueError('length of layer_type, layer_params, layer_sizes must be compatible')
         for i, (n_in, n_out, layer_type, params) in enumerate(zip(layer_sizes[:-1],
@@ -44,14 +45,22 @@ class BayesianNetwork(object):
                                                               layer_params)):
             self.layers.append(layer_type(n_in, n_out, 'w'+str(i), params))
             self.stochastic_names.append('w'+str(i))
+        self._kl_weights.extend(self.layers)
 
         if outsample_cls is None:
             self._outsample = None
         else:
             self._outsample = outsample_cls(self.out_params)
             self.stochastic_names += self._outsample.stochastic_names
+            self._kl_weights.append(self._outsample)
 
         self.first_build = True
+
+    def build_kl(self):
+        kl = 0.
+        for w in self._kl_weights:
+            kl = kl + w.kl_exact
+        return kl
 
     @property
     def layer_sizes(self):
@@ -213,7 +222,7 @@ class BayesianLearning(object):
         # BayesianNet instance with every stochastic node observed.
         model, dist, _ = self.buildnet(zs.merge_dicts(self._qs, {'y': y_obs}))
         self._model = model
-        self._dist = dist  # = model.outputs("y_pred")
+        self._dist = dist  # = model.outputs("y")
         self._kwargs = kwargs
 
     @property
@@ -259,29 +268,12 @@ class BayesianLearning(object):
         log_prob = tf.reduce_mean(self.dist.log_prob(tf.stop_gradient(targets)), 0)
         return log_prob
 
-    @property
-    def kl(self):
-        """ KL divergence of the variational posterior and prior.
+    def build_kl(self) -> tf.Tensor:
+        """ KL divergence of the variational posterior over the layer weights
+        from the weights prior.
         :return: tensor of shape [n_particles]
         """
-        kl = 0.
-        for l in self._net.layers:
-            if not hasattr(l, 'kl_exact'):
-                kl = kl + tf.reduce_mean(l.kl_appro)
-            else:
-                kl = kl + l.kl_exact
-            if hasattr(l, 'kl_gamma'):
-                kl = kl + l.kl_gamma
-        if self._net.outsample and hasattr(self._net._outsample, 'kl_exact'):
-            kl = kl + self._net._outsample.kl_exact
-        return kl
-
-    @property
-    def kl_gamma(self):
-        kl = 0.
-        for l in self._net.layers:
-            kl = kl + l.kl_gamma
-        return kl
+        return self._net.build_kl()
 
     @property
     def h_pred(self):

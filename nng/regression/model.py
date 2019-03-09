@@ -97,7 +97,7 @@ class Model(BaseModel):
             raise NotImplementedError()
 
         self._log_py_xw = self._build_log_py_xw()
-        self.kl = self.learn.kl
+        self.kl = self.learn.build_kl()
         self.loss_prec = self._build_loss_prec()
         self.lower_bound = self._build_lower_bound()
 
@@ -140,7 +140,7 @@ class Model(BaseModel):
     def _build_lower_bound(self) -> tf.Tensor:
         lower_bound = tf.reduce_mean(
                 self._log_py_xw - \
-                self.config.kl * self.learn.kl / self.n_data)
+                self.config.kl * self.kl / self.n_data)
         lower_bound = lower_bound - tf.reduce_mean(self.loss_prec)
 
         return lower_bound
