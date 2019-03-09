@@ -16,7 +16,8 @@ from nng.regression.network.ffn import *
 
 class Model(BaseModel):
     def __init__(self, config, input_dim, n_data,
-            inputs: Optional[tf.Tensor] = None):
+            inputs: Optional[tf.Tensor] = None,
+            add_outsample: bool = True):
         """ Initialize a class Model.
         :param config: Configuration Bundle.
         :param input_dim: int
@@ -32,12 +33,11 @@ class Model(BaseModel):
         else:
             print("[!] Optimizer: {}".format(config.optimizer))
             self.layer_type = None
-        self.input_dim = input_dim
-        self.n_data = n_data
+        self.input_dim = input_dim  # type: List[int]
+        self.n_data = n_data  # type: int
 
         # Initialize attributes.
         self.n_particles = tf.placeholder(tf.int32)  # type: tf.Tensor
-        ## self.inputs = None
         inputs_shape = [self.n_particles] + self.input_dim
         self.inputs = with_shape(tf.convert_to_tensor(inputs_shape),
                 inputs or tf.placeholder(tf.float32,
@@ -49,7 +49,7 @@ class Model(BaseModel):
         self.beta = tf.placeholder(tf.float32, shape=[], name='beta')  # type: tf.Tensor
         self.omega = tf.placeholder(tf.float32, shape=[], name='omega')  # type: tf.Tensor
 
-        self._outsample_flag = True  # type: bool
+        self._outsample_flag = add_outsample  # type: bool
 
         # Build the model.
         self._build_model()
@@ -96,7 +96,7 @@ class Model(BaseModel):
         else:
             raise NotImplementedError()
 
-        self._log_py_xw = self.learn.log_py_xw
+        self._log_py_xw = self._build_log_py_xw()
         self.kl = self.learn.kl
         self.loss_prec = self._build_loss_prec()
         self.lower_bound = self._build_lower_bound()
@@ -117,6 +117,9 @@ class Model(BaseModel):
 
     def init_saver(self):
         self.saver = tf.train.Saver(max_to_keep=self.config.max_to_keep)
+
+    def _build_log_py_xw(self) -> tf.Tensor:
+        return self.learn.log_py_xw
 
     def _build_loss_prec(self) -> tf.Tensor:
         if not self._outsample_flag:
