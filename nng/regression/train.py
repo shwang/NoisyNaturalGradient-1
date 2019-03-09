@@ -73,7 +73,7 @@ class Trainer(BaseTrain):
                 self.sess.run([self.model.scale_update_op], feed_dict=feed_dict)
 
             lb, log_py_xw, kl, y_pred, y, loss_prec = self.sess.run([self.model.lower_bound,
-                                                                     self.model.log_py_xw,
+                                                                     self.model.mean_log_py_xw,
                                                                      self.model.kl,
                                                                      self.model.y_pred,
                                                                      self.model.y,
