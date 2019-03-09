@@ -2,9 +2,12 @@ from __future__ import absolute_import
 from __future__ import print_function
 from __future__ import division
 
+from typing import Optional, Type
+
 import tensorflow as tf
 import zhusuan as zs
 
+from nng.regression.controller.sample import NormalOutSample
 from nng.regression.misc.layers import FeedForward
 from nng.regression.misc.eval_utils import rmse, log_likelihood
 from nng.regression.misc.collections import add_to_collection
@@ -13,14 +16,15 @@ from nng.regression.misc.collections import add_to_collection
 class BayesianNetwork(object):
     """ BayesianNetwork is a class with flexible priors and variational posteriors.
     """
-    def __init__(self, layer_sizes, layer_types, layer_params, out_params, activation_fn, outsample):
+    def __init__(self, layer_sizes, layer_types, layer_params, out_params,
+            activation_fn, outsample_cls: Type[NormalOutSample] = None):
         """ Initialize BayesianNetwork.
         :param layer_sizes: [int]
         :param layer_types: [Layer]
         :param layer_params: [dict]
         :param out_params: [dict]
         :param activation_fn: activation function
-        :param outsample: OutSample
+        :param outsample_cls: Type[OutSample]
         """
         super(BayesianNetwork, self).__init__()
         self._layer_sizes = layer_sizes
@@ -39,8 +43,8 @@ class BayesianNetwork(object):
             self.layers.append(layer_type(n_in, n_out, 'w'+str(i), params))
             self.stochastic_names.append('w'+str(i))
 
-        self._outsample = outsample(self.out_params)
-        self.stochastic_names = self.stochastic_names + self.outsample.stochastic_names
+        self._outsample = outsample_cls(self.out_params)
+        self.stochastic_names = self.stochastic_names + self._outsample.stochastic_names
         self.first_build = True
 
     @property
@@ -116,7 +120,7 @@ class BayesianNetwork(object):
         :return h: tensor of shape [n_particles, batch_size, 1]. Final hidden layer.
         """
         h = self._forward(inputs, n_particles)
-        output = self.outsample.forward(h)
+        output = self._outsample.forward(h)
         if self.first_build:
             self.first_build = False
         return output, h
@@ -149,9 +153,9 @@ class BayesianLearning(object):
                     # in this BayesNet context corresponding to somehting.
                     self._qws.update({l.w_name: l.qws(self.n_particles)})
 
-            if hasattr(self._net.outsample, 'qs'):
-                self._q_out = self._net.outsample.qs(self.n_particles)
-                self._q_names = self._q_names + self._net.outsample.stochastic_names[:-1]
+            if hasattr(self._net._outsample, 'qs'):
+                self._q_out = self._net._outsample.qs(self.n_particles)
+                self._q_names = self._q_names + self._net._outsample.stochastic_names[:-1]
 
                 if not isinstance(self._q_out, list):
                     self._q_out = [self._q_out]
@@ -259,8 +263,8 @@ class BayesianLearning(object):
                 kl = kl + l.kl_exact
             if hasattr(l, 'kl_gamma'):
                 kl = kl + l.kl_gamma
-        if hasattr(self._net.outsample, 'kl_exact'):
-            kl = kl + self._net.outsample.kl_exact
+        if hasattr(self._net._outsample, 'kl_exact'):
+            kl = kl + self._net._outsample.kl_exact
         return kl
 
     @property
@@ -307,13 +311,13 @@ class BayesianLearning(object):
 
     @property
     def rmse(self):
-        if not self._net.outsample.task == 'regression':
+        if not self._net._outsample.task == 'regression':
             raise NotImplementedError
         y_pred = tf.reduce_mean(self.h_pred, [0, 2])
         return rmse(y_pred, self.y, self.kwargs['std_y_train'])
 
     @property
     def log_likelihood(self):
-        if not self._net.outsample.task == 'regression':
+        if not self._net._outsample.task == 'regression':
             raise NotImplementedError
         return log_likelihood(self.log_py_xw, self.kwargs['std_y_train'])

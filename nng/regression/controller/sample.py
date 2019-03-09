@@ -52,6 +52,13 @@ class OutSample(object):
         """
         return NotImplementedError
 
+    def forward(self, mean):
+        """Samples from the normal distribution centered at the provided
+        `mean` and with precision drawn from the prior Gamma distribution
+        (`self.ps`).
+        """
+        return NotImplementedError
+
 
 class NormalOutSample(OutSample):
     """
