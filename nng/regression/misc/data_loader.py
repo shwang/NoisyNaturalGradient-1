@@ -3,6 +3,7 @@ from __future__ import print_function
 from __future__ import division
 
 import os
+from typing import Tuple
 
 import numpy as np
 from torch.utils.data import Dataset, DataLoader
@@ -10,7 +11,8 @@ from torch.utils.data import Dataset, DataLoader
 from nng.misc.utils import NNG_DIR
 
 
-def generate_data_loader(config, seed=0, delimiter=None, dtype=np.float32):
+def generate_data_loader(config, seed=0, delimiter=None, dtype=np.float32
+        ) -> "Tuple[RegressionDataset, RegressionDataset, float, Tuple[int]]":
     seed = np.random.RandomState(seed)
 
     data = np.loadtxt(
@@ -47,8 +49,9 @@ def generate_data_loader(config, seed=0, delimiter=None, dtype=np.float32):
                              batch_size=config.test_batch_size,
                              shuffle=True,
                              num_workers=config.num_workers)
+    assert np.all(trainset.input_dim == testset.input_dim)
 
-    return train_loader, test_loader, std_y_train
+    return train_loader, test_loader, std_y_train, trainset.input_dim
 
 
 def standardize(data_train, *args):
@@ -88,6 +91,10 @@ class RegressionDataset(Dataset):
 
         if self._data_x.shape[0] != self._data_y.shape[0]:
             raise ValueError("Input and Target have different number of data.")
+
+    @property
+    def input_dim(self) -> Tuple[int]:
+        return self[0][0].shape
 
     def permute(self, seed):
         perm = np.random.RandomState(seed=seed).permutation(self._data_x.shape[0])

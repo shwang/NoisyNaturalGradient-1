@@ -22,19 +22,6 @@ _CLASSIFICATION_INPUT_DIM = {
     "cifar100": [32, 32, 3],
 }
 
-_REGRESSION_INPUT_DIM = {
-    "concrete": [8],
-    "energy": [8],
-    "housing": [13],
-    "kin8nm": [8],
-    "naval": [17],
-    "power_plant": [4],
-    "protein": [9],
-    "wine": [11],
-    "yacht_hydrodynamics": [6],
-    "year_prediction": [90]
-}
-
 
 def main():
     tf.set_random_seed(1231)
@@ -76,12 +63,10 @@ def main():
         trainer = ClassificationTrainer(sess, model_, train_loader, test_loader, config, logger)
 
     elif config.mode == "regression":
-        train_loader, test_loader, std_train = generate_data_loader(config)
+        train_loader, test_loader, std_train, input_dim = generate_data_loader(config)
         config.std_train = std_train
 
-        model_ = RegressionModel(config,
-                                 _REGRESSION_INPUT_DIM[config.dataset],
-                                 len(train_loader.dataset))
+        model_ = RegressionModel(config, input_dim, len(train_loader.dataset))
         trainer = RegressionTrainer(sess, model_, train_loader, test_loader, config, logger)
 
     else:

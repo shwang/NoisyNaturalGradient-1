@@ -1,7 +1,7 @@
 from __future__ import absolute_import
 from __future__ import print_function
 from __future__ import division
-from typing import List, Optional, Tuple, Sequence
+from typing import Iterable, List, Optional, Tuple, Sequence
 
 import tensorflow as tf
 from tensorflow.contrib.framework import with_shape
@@ -15,8 +15,8 @@ from nng.regression.network.ffn import *
 
 
 class Model(BaseModel):
-    def __init__(self, config, input_dim, n_data,
-            inputs: Optional[tf.Tensor] = None,
+    def __init__(self, config, input_dim: Iterable[int], n_data: int,
+            inputs_ph: Optional[tf.Tensor] = None,
             add_outsample: bool = True):
         """ Initialize a class Model.
         :param config: Configuration Bundle.
@@ -38,10 +38,10 @@ class Model(BaseModel):
 
         # Initialize attributes.
         self.n_particles = tf.placeholder(tf.int32)  # type: tf.Tensor
-        inputs_shape = [self.n_particles] + self.input_dim
+        inputs_shape = [self.n_particles] + list(self.input_dim)
         self.inputs = with_shape(tf.convert_to_tensor(inputs_shape),
-                inputs or tf.placeholder(tf.float32,
-                        shape=[None] + self.input_dim))  # type: tf.Tensor
+                inputs_ph or tf.placeholder(tf.float32,
+                        shape=[None] + list(self.input_dim)))  # type: tf.Tensor
 
         # self.is_training = None  ##
         self.targets = tf.placeholder(tf.float32, [None])  # type: tf.Tensor
