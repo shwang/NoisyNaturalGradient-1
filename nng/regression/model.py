@@ -104,7 +104,8 @@ class Model(BaseModel):
         self.mean_log_py_xw = tf.reduce_mean(self._log_py_xw)
         self.rmse = self.learn.rmse
         self.ll = self.learn.log_likelihood
-        self.y_pred = tf.reduce_mean(self.learn.h_pred)
+        self.h_pred = self.learn.h_pred
+        self.y_pred = tf.reduce_mean(self.h_pred)
         self.y = tf.reduce_mean(self.targets)
 
         optimizer = tf.train.AdamOptimizer(self.config.learning_rate)

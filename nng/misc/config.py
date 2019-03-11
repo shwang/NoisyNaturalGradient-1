@@ -1,11 +1,12 @@
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
+import json
+import os
 
 from bunch import Bunch
 
-import json
-import os
+from nng.misc.utils import NNG_DIR
 
 
 class Bunch3(Bunch):
@@ -35,6 +36,6 @@ def process_config(json_file):
     :return: config(dictionary)
     """
     config, _ = get_config_from_json(json_file)
-    config.summary_dir = os.path.join("./experiments", config.dataset, config.exp_name, "summary/")
-    config.checkpoint_dir = os.path.join("./experiments", config.dataset, config.exp_name, "checkpoint/")
+    config.summary_dir = os.path.join(NNG_DIR, "../experiments", config.dataset, config.exp_name, "summary/")
+    config.checkpoint_dir = os.path.join(NNG_DIR, "../experiments", config.dataset, config.exp_name, "checkpoint/")
     return config

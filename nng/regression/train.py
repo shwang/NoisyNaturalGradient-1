@@ -72,6 +72,7 @@ class Trainer(BaseTrain):
             if self.model.scale_update_op is not None:
                 self.sess.run([self.model.scale_update_op], feed_dict=feed_dict)
 
+            m = self.model
             lb, log_py_xw, kl, y_pred, y, loss_prec = self.sess.run([self.model.lower_bound,
                                                                      self.model.mean_log_py_xw,
                                                                      self.model.kl,
@@ -92,7 +93,7 @@ class Trainer(BaseTrain):
         average_y = np.mean(y_list)
         average_loss_prec = np.mean(loss_prec_list)
 
-        self.logger.info("train | Lower Bound: %5.6f | log_py_wx: %5.6f | "
+        print("train | Lower Bound: %5.6f | log_py_wx: %5.6f | "
                          "KL: %5.6f | y_pred: %5.6f | y: %5.6f | "
                          "loss prec: %5.6f" % (float(average_lb),
                                                float(average_log_py_xw),
@@ -156,3 +157,9 @@ class Trainer(BaseTrain):
 
     def get_result(self):
         return self.test_epoch()
+
+    def sample_outputs(self, feat, n_samples):
+        fd = {
+                self.model.inputs: feat,
+                self.model.n_particles: n_samples,}
+        return self.sess.run(self.model.h_pred, feed_dict=fd)
