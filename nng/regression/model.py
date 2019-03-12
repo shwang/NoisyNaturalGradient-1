@@ -19,7 +19,8 @@ if typing.TYPE_CHECKING:
 
 
 class Model(BaseModel):
-    def __init__(self, config, input_dim: Iterable[int], n_data: int,
+    def __init__(self, config, input_dim: Iterable[int], n_data: int, *,
+            n_particles_ph: Optional[tf.Tensor] = None,
             inputs_ph: Optional[tf.Tensor] = None,
             problem: "Optional[Problem]" = None):
         """ Initialize a class Model.
@@ -42,7 +43,7 @@ class Model(BaseModel):
         self.problem = problem
 
         # Initialize attributes.
-        self.n_particles = tf.placeholder(tf.int32)  # type: tf.Tensor
+        self.n_particles = n_particles_ph or tf.placeholder(tf.int32)  # type: tf.Tensor
         inputs_shape = [self.n_particles] + list(self.input_dim)
         self.inputs = with_shape(tf.convert_to_tensor(inputs_shape),
                 inputs_ph or tf.placeholder(tf.float32,
