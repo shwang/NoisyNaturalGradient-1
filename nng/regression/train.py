@@ -1,6 +1,7 @@
 from __future__ import absolute_import
 from __future__ import print_function
 from __future__ import division
+from typing import Dict, Iterable
 
 import numpy as np
 
@@ -8,10 +9,19 @@ from nng.core.base_train import BaseTrain
 
 
 class Trainer(BaseTrain):
-    def __init__(self, sess, model, train_loader, test_loader, config, logger):
+    train_loader = ...  # Iterable[Dict]
+    test_loader = ...  # Iterable[Dict]
+
+    def __init__(self, sess, model,
+            train_loader: Iterable[Dict], test_loader: Iterable,
+            config, logger):
         super(Trainer, self).__init__(sess, model, config, logger)
-        self.train_loader = train_loader
-        self.test_loader = test_loader
+        if self.model.stub == "regression":
+            self.train_loader = _DataLoaderIterWrapped(train_loader, self)
+            self.test_loader = _DataLoaderIterWrapped(test_loader, self)
+        else:
+            self.train_loader = train_loader
+            self.test_loader = test_loader
 
         self.alpha = self.model.config.alpha
         self.beta = self.model.config.beta
@@ -45,15 +55,17 @@ class Trainer(BaseTrain):
         y_list = []
         loss_prec_list = []
 
-        for itr, (x, y) in enumerate(self.train_loader):
-            feed_dict = {
-                self.model.inputs: x,
-                self.model.targets: y,
-                self.model.n_particles: self.config.train_particles,
-                self.model.alpha: self.alpha,
-                self.model.beta: self.beta,
-                self.model.omega: self.omega
-            }
+        fd_base = {
+            self.model.n_particles: self.config.train_particles,
+            self.model.alpha: self.alpha,
+            self.model.beta: self.beta,
+            self.model.omega: self.omega,}
+
+        for itr, feed_dict_mod in enumerate(self.train_loader):
+            feed_dict = {}
+            feed_dict.update(fd_base)
+            feed_dict.update(feed_dict_mod)
+
             self.sess.run([self.model.train_op], feed_dict=feed_dict)
 
             cur_iter = self.model.global_step_tensor.eval(self.sess)
@@ -73,33 +85,24 @@ class Trainer(BaseTrain):
                 self.sess.run([self.model.scale_update_op], feed_dict=feed_dict)
 
             m = self.model
-            lb, log_py_xw, kl, y_pred, y, loss_prec = self.sess.run([self.model.lower_bound,
-                                                                     self.model.mean_log_py_xw,
-                                                                     self.model.kl,
-                                                                     self.model.y_pred,
-                                                                     self.model.y,
-                                                                     self.model.loss_prec], feed_dict=feed_dict)
+            lb, log_py_xw, kl, loss_prec = self.sess.run(
+                    [self.model.lower_bound, self.model.mean_log_py_xw,
+                        self.model.kl, self.model.loss_prec],
+                    feed_dict=feed_dict)
             lb_lst.append(lb)
             log_py_xw_list.append(log_py_xw)
             kl_list.append(kl)
-            y_pred_list.append(y_pred)
-            y_list.append(y)
             loss_prec_list.append(loss_prec)
 
         average_lb = np.mean(lb_lst)
         average_log_py_xw = np.mean(log_py_xw_list)
         average_kl = np.mean(kl_list)
-        average_y_pred = np.mean(y_pred_list)
-        average_y = np.mean(y_list)
         average_loss_prec = np.mean(loss_prec_list)
 
         print("train | Lower Bound: %5.6f | log_py_wx: %5.6f | "
-                         "KL: %5.6f | y_pred: %5.6f | y: %5.6f | "
-                         "loss prec: %5.6f" % (float(average_lb),
+                         "KL: %5.6f | loss prec: %5.6f" % (float(average_lb),
                                                float(average_log_py_xw),
                                                float(average_kl),
-                                               float(average_y_pred),
-                                               float(average_y),
                                                float(average_loss_prec)))
 
         # Summarize
@@ -107,8 +110,6 @@ class Trainer(BaseTrain):
         summaries_dict['train_lb'] = average_lb
         summaries_dict['train_log_py_xw'] = average_log_py_xw
         summaries_dict['train_kl'] = average_kl
-        summaries_dict['train_y_pred'] = average_y_pred
-        summaries_dict['train_y'] = average_y
         summaries_dict['train_loss_prec'] = average_loss_prec
 
         # Summarize
@@ -116,22 +117,26 @@ class Trainer(BaseTrain):
         self.summarizer.summarize(cur_iter, summaries_dict=summaries_dict)
 
         # Shuffle the dataset.
-        self.train_loader.dataset.permute(0)
+        if self.model.stub == "regression":
+            self.train_loader.data_loader.dataset.permute(0)  # pytype: disable=attribute-error
 
     def test_epoch(self):
         lb_list = []
         rmse_list = []
         ll_list = []
-        for (x, y) in self.test_loader:
-            feed_dict = {
-                self.model.inputs: x,
-                self.model.targets: y,
+        base_fd = {
                 self.model.n_particles: self.config.test_particles,
                 self.model.alpha: self.alpha,
                 self.model.beta: self.beta,
                 self.model.omega: self.omega
             }
-            lb, rmse, ll = self.sess.run([self.model.lower_bound, self.model.rmse, self.model.ll], feed_dict=feed_dict)
+        for feed_dict_mod in self.test_loader:
+            fd = {}
+            fd.update(base_fd)
+            fd.update(feed_dict_mod)
+            lb, rmse, ll = self.sess.run(
+                    [self.model.lower_bound, self.model.rmse, self.model.ll],
+                    feed_dict=fd)
 
             lb_list.append(lb)
             rmse_list.append(rmse)
@@ -163,3 +168,17 @@ class Trainer(BaseTrain):
                 self.model.inputs: feat,
                 self.model.n_particles: n_samples,}
         return self.sess.run(self.model.h_pred, feed_dict=fd)
+
+
+class _DataLoaderIterWrapped:
+    def __init__(self, data_loader: Iterable, trainer: Trainer):
+        self.data_loader = data_loader
+        self.trainer = trainer
+        self.model = self.trainer.model
+
+    def __iter__(self) -> Iterable:
+        for x, y in self.data_loader:
+            yield self._build_nng_fd_mod(x, y)
+
+    def _build_nng_fd_mod(self, x, y):
+        return {self.model.inputs: x, self.model.targets: y}

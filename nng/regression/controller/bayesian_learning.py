@@ -18,7 +18,7 @@ class BayesianNetwork(object):
     """ BayesianNetwork is a class with flexible priors and variational posteriors.
     """
     def __init__(self, layer_sizes, layer_types, layer_params, out_params,
-            activation_fn,
+            activation_fn, *, stub: str,
             outsample_cls: "Optional[Type[NormalOutSample]]" = None):
         """ Initialize BayesianNetwork.
         :param layer_sizes: [int]
@@ -54,6 +54,7 @@ class BayesianNetwork(object):
             self.stochastic_names += self._outsample.stochastic_names
             self._kl_weights.append(self._outsample)
 
+        self.stub = stub
         self.first_build = True
 
     def build_kl(self):
@@ -147,13 +148,11 @@ class BayesianNetwork(object):
 class BayesianLearning(object):
     """ A class to learn BNN.
     """
-    def __init__(self, layer_sizes, layer_types, layer_params, out_params, activation_fn, outsample,
-                 x, y, n_particles, **kwargs):
-        """ Initialize class BayesianLearning.
-        """
-
-        self._net = BayesianNetwork(layer_sizes, layer_types, layer_params, out_params,
-                                    activation_fn, outsample)
+    def __init__(self, *, layer_sizes, layer_types, layer_params, out_params,
+            activation_fn, outsample_cls, x, y, n_particles,
+            stub: str, **kwargs):
+        self._net = BayesianNetwork(layer_sizes, layer_types, layer_params,
+                out_params, activation_fn, outsample_cls=outsample_cls, stub=stub)
         self._n_particles = n_particles
         self._x = x
         self._y = y
@@ -222,7 +221,7 @@ class BayesianLearning(object):
         # BayesianNet instance with every stochastic node observed.
         model, dist, _ = self.buildnet(zs.merge_dicts(self._qs, {'y': y_obs}))
         self._model = model
-        self._dist = dist  # = model.outputs("y")
+        self._dist = self._y = dist  # = model.outputs("y")
         self._kwargs = kwargs
 
     @property

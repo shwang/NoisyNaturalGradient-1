@@ -1,6 +1,7 @@
 from __future__ import absolute_import
 from __future__ import print_function
 from __future__ import division
+import typing
 from typing import Iterable, List, Optional, Tuple, Sequence
 
 import tensorflow as tf
@@ -13,11 +14,14 @@ from nng.regression.misc.layers import *
 from nng.regression.controller.sample import NormalOutSample
 from nng.regression.network.ffn import *
 
+if typing.TYPE_CHECKING:
+    from irdplus.bnn.problem.problem import Problem
+
 
 class Model(BaseModel):
     def __init__(self, config, input_dim: Iterable[int], n_data: int,
             inputs_ph: Optional[tf.Tensor] = None,
-            add_outsample: bool = True):
+            problem: "Optional[Problem]" = None):
         """ Initialize a class Model.
         :param config: Configuration Bundle.
         :param input_dim: int
@@ -35,6 +39,7 @@ class Model(BaseModel):
             self.layer_type = None
         self.input_dim = input_dim  # type: List[int]
         self.n_data = n_data  # type: int
+        self.problem = problem
 
         # Initialize attributes.
         self.n_particles = tf.placeholder(tf.int32)  # type: tf.Tensor
@@ -49,7 +54,10 @@ class Model(BaseModel):
         self.beta = tf.placeholder(tf.float32, shape=[], name='beta')  # type: tf.Tensor
         self.omega = tf.placeholder(tf.float32, shape=[], name='omega')  # type: tf.Tensor
 
-        self._outsample_flag = add_outsample  # type: bool
+        if not self.problem:
+            self.stub = "regression"
+        else:
+            self.stub = self.problem.stupid_stub
 
         # Build the model.
         self._build_model()
@@ -68,7 +76,7 @@ class Model(BaseModel):
                                            self.config.damping,
                                            self.omega)
 
-        outsample_cls = NormalOutSample if self._outsample_flag else None
+        outsample_cls = NormalOutSample if self.stub == "regression" else None
         if self.layer_type == "emvg":
             self.learn = BayesianLearning(
                     layer_sizes=[self.inputs.shape[-1], num_hidden, 1],
@@ -76,11 +84,12 @@ class Model(BaseModel):
                     layer_params=[{}] * 2,
                     out_params={},
                     activation_fn=tf.nn.relu,
-                    outsample=outsample_cls,
+                    outsample_cls=outsample_cls,
                     x=self.inputs,
                     y=self.targets,
                     n_particles=self.n_particles,
-                    std_y_train=self.config.std_train)
+                    std_y_train=self.config.std_train,
+                    stub=self.stub)
         elif self.layer_type == "mvg":
             self.learn = BayesianLearning(
                     layer_sizes=[self.inputs.shape[-1], 50, 1],
@@ -88,13 +97,14 @@ class Model(BaseModel):
                     layer_params=[{}] * 2,
                     out_params={},
                     activation_fn=tf.nn.relu,
-                    outsample=outsample_cls,
+                    outsample_cls=outsample_cls,
                     x=self.inputs,
                     y=self.targets,
                     n_particles=self.n_particles,
-                    std_y_train=self.config.std_train)
+                    std_y_train=self.config.std_train,
+                    stub=self.stub)
         else:
-            raise NotImplementedError()
+            raise ValueError(self.layer_type)
 
         self._log_py_xw = self._build_log_py_xw()
         self.kl = self.learn.build_kl()
@@ -105,8 +115,6 @@ class Model(BaseModel):
         self.rmse = self.learn.rmse
         self.ll = self.learn.log_likelihood
         self.h_pred = self.learn.h_pred
-        self.y_pred = tf.reduce_mean(self.h_pred)
-        self.y = tf.reduce_mean(self.targets)
 
         optimizer = tf.train.AdamOptimizer(self.config.learning_rate)
 
@@ -116,14 +124,43 @@ class Model(BaseModel):
         prec_op = self._build_prec_op()
         self.train_op = tf.group([weight_update_op, prec_op], name="train_op")
 
+    def get_train_output(self) -> tf.Tensor:
+        """
+        Returns the output that should be used for calculating training loss.
+        """
+        if self.stub == "regression":
+            return self.learn._y
+        elif self.stub == "ird":
+            return self.h_pred
+        else:
+            raise ValueError(self.stub)
+
+    def get_test_output(self) -> tf.Tensor:
+        """
+        Returns the output that should be used for testing.
+        """
+        if self.stub == "regression":
+            return self.h_pred
+        elif self.stub == "ird":
+            return self.h_pred
+        else:
+            raise ValueError(self.stub)
+
     def init_saver(self):
         self.saver = tf.train.Saver(max_to_keep=self.config.max_to_keep)
 
     def _build_log_py_xw(self) -> tf.Tensor:
-        return self.learn.log_py_xw
+        if self.stub == "regression":
+            return self.learn.log_py_xw
+        elif self.stub == "ird":
+            output = self.get_train_output()
+            return self.problem.build_data_loss(output,
+                    l1_loss=0.0, l2_loss=0.0)
+        else:
+            raise ValueError(self.problem.stupid_stub)
 
     def _build_loss_prec(self) -> tf.Tensor:
-        if not self._outsample_flag:
+        if self.stub != "regression":
             return tf.constant(0.0, name="loss_prec")
 
         # log_alpha, log_beta = tf.trainable_variables()[-2:]  # Ewww
