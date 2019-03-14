@@ -9,8 +9,8 @@ from nng.core.base_train import BaseTrain
 
 
 class Trainer(BaseTrain):
-    train_loader = ...  # Iterable[Dict]
-    test_loader = ...  # Iterable[Dict]
+    train_loader = ...  # type: Iterable[Dict]
+    test_loader = ...  # type: Iterable[Dict]
 
     def __init__(self, sess, model,
             train_loader: Iterable[Dict], test_loader: Iterable,
@@ -32,7 +32,7 @@ class Trainer(BaseTrain):
             self.sess.run(self.model.init_ops)
 
         for cur_epoch in range(self.config.epoch):
-            self.logger.info('epoch: {}'.format(int(cur_epoch)))
+            print('epoch: {}'.format(int(cur_epoch)))
             self.train_epoch()
 
             if cur_epoch % self.config.get("epoch_rate", 10) == 0:
@@ -145,7 +145,7 @@ class Trainer(BaseTrain):
         average_lb = np.mean(lb_list)
         average_rmse = np.mean(rmse_list)
         average_ll = np.mean(ll_list)
-        self.logger.info("test | Lower Bound: %5.6f | RMSE: %5.6f | "
+        print("test | Lower Bound: %5.6f | RMSE: %5.6f | "
                          "Log Likelihood : %5.6f" % (float(average_lb), float(average_rmse), float(average_ll)))
 
         # Summarize
@@ -162,12 +162,6 @@ class Trainer(BaseTrain):
 
     def get_result(self):
         return self.test_epoch()
-
-    def sample_outputs(self, feat, n_samples):
-        fd = {
-                self.model.inputs: feat,
-                self.model.n_particles: n_samples,}
-        return self.sess.run(self.model.h_pred, feed_dict=fd)
 
 
 class _DataLoaderIterWrapped:

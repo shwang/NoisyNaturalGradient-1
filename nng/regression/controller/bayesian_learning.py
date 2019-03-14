@@ -6,6 +6,7 @@ from typing import Optional, Type
 
 import numpy as np
 import tensorflow as tf
+from tensorflow.contrib.framework import with_shape
 import zhusuan as zs
 
 from nng.regression.controller.sample import NormalOutSample
@@ -29,6 +30,7 @@ class BayesianNetwork(object):
         :param outsample_cls: Type[OutSample]
         """
         super(BayesianNetwork, self).__init__()
+        self.stub = stub
         self._layer_sizes = layer_sizes
         self._layer_types = layer_types
         self._layer_params = layer_params
@@ -54,14 +56,13 @@ class BayesianNetwork(object):
             self.stochastic_names += self._outsample.stochastic_names
             self._kl_weights.append(self._outsample)
 
-        self.stub = stub
         self.first_build = True
 
     def build_kl(self):
         kl = 0.
         for w in self._kl_weights:
             kl = kl + w.kl_exact
-        return kl
+        return with_shape([], kl)
 
     @property
     def layer_sizes(self):
@@ -153,9 +154,10 @@ class BayesianLearning(object):
             stub: str, **kwargs):
         self._net = BayesianNetwork(layer_sizes, layer_types, layer_params,
                 out_params, activation_fn, outsample_cls=outsample_cls, stub=stub)
+        self.stub = stub
         self._n_particles = n_particles
-        self._x = x
-        self._y = y
+        self.x = x
+        self.targets = y
 
         # Holds all the string keys of variational weights. Seems to be
         # the same as `list(self._qws)`, with reordering.
@@ -180,30 +182,11 @@ class BayesianLearning(object):
 
         # observed dict
         if hasattr(self, '_q_out'):
-            self._qs = zs.merge_dicts(
+            qs = zs.merge_dicts(
                 self._qws,
                 dict(zip(self._net.outsample.stochastic_names[:-1], self._q_out)))
         else:
-            self._qs = self._qws
-
-        # `self._qs` is now a Dictionary that maps each StochasticTensor name in
-        # `variational` to its StochasticTensor. Perfect for building an
-        # observation dictionary where everything variational parameter is
-        # observed.
-
-        """
-        In the case of Regression problem,
-           * y_pred != h_pred. (Since we outsample y_pred from a Normal
-                                      distribution).
-           * Also, by default we should observe {'y': tiled(target)}.
-           * log_py_xw and sampled_log_prob come from evaluating zs log prob
-                    of model.get("y"), (either observed y or sampled y).
-        In the case of IRD problem,
-           * y_pred == h_pred? (Since there is no outsample before loss)
-           * log_py_xw and sampled_log_prob come from evaluating a Tensor
-                   representing IRD loss. We should still observe model
-                   parameters as variational samples.
-        """
+            qs = dict(self._qws)
 
         @zs.reuse('buildnet')
         def buildnet(observed):
@@ -217,11 +200,13 @@ class BayesianLearning(object):
             return model, y_pred, h_pred
         self.buildnet = buildnet
 
-        y_obs = tf.tile(tf.expand_dims(self.y, 0), [self.n_particles, 1])
+        y_obs = tf.tile(tf.expand_dims(y, 0), [self.n_particles, 1])
         # BayesianNet instance with every stochastic node observed.
-        model, dist, _ = self.buildnet(zs.merge_dicts(self._qs, {'y': y_obs}))
+        if self.stub == "regression":
+            qs.update(y=y_obs)
+        model, dist, self.h_pred = self.buildnet(qs)
         self._model = model
-        self._dist = self._y = dist  # = model.outputs("y")
+        self._dist = self.y_pred = dist  # = model.outputs("y")
         self._kwargs = kwargs
 
     @property
@@ -235,14 +220,6 @@ class BayesianLearning(object):
     @property
     def dist(self):
         return self._dist
-
-    @property
-    def x(self):
-        return self._x
-
-    @property
-    def y(self):
-        return self._y
 
     @property
     def n_particles(self):
@@ -263,6 +240,8 @@ class BayesianLearning(object):
 
     @property
     def sampled_log_prob(self):
+        if self.stub != "regression":
+            raise NotImplementedError(self.stub)
         targets = self.dist.sample(1)
         log_prob = tf.reduce_mean(self.dist.log_prob(tf.stop_gradient(targets)), 0)
         return log_prob
@@ -275,35 +254,11 @@ class BayesianLearning(object):
         return self._net.build_kl()
 
     @property
-    def h_pred(self):
-        """ Final hidden layer of the network.
-        :return: tensor of shape [n_particles, batch_size, n]
-        """
-        _, _, h_pred = self.buildnet(self._qs)
-        return h_pred
-
-    @property
-    def y_pred(self):
-        """ Return Output.
-        :return: tensor of shape [n_particles, batch_size]
-        """
-        _, y_pred, _ = self.buildnet(self._qs)
-        return y_pred
-
-    @property
     def kwargs(self):
         """ Useful info for the class.
         :return: dict
         """
         return self._kwargs
-
-    @property
-    def qs(self):
-        """ The observed dict with all nodes except output.
-        For example, including 'w':qw, 'y_prec':q_prec
-        :return: dict of (str, tensor).
-        """
-        return self._qs
 
     @property
     def qws(self):
@@ -313,8 +268,8 @@ class BayesianLearning(object):
     def rmse(self):
         if not self._net._outsample or not self._net._outsample.task == 'regression':
             return np.nan
-        y_pred = tf.reduce_mean(self.h_pred, [0, 2])
-        return rmse(y_pred, self.y, self.kwargs['std_y_train'])
+        h_pred = tf.reduce_mean(self.h_pred, [0, 2])
+        return rmse(h_pred, self.targets, self.kwargs['std_y_train'])
 
     @property
     def log_likelihood(self):
