@@ -130,9 +130,9 @@ class Model(BaseModel):
         self.loss_prec = self._build_loss_prec()
         self.lower_bound = self._build_lower_bound()
 
-        self.mean_log_py_xw = tf.reduce_mean(self._log_py_xw)
+        self.mean_log_py_xw = self._log_py_xw
         self.rmse = self.learn.rmse
-        self.ll = self.learn.log_likelihood  # TODO: Might be wrong for "ird"
+        self.ll = self.learn.log_likelihood
 
         optimizer = tf.train.AdamOptimizer(self.config.learning_rate)
 
@@ -181,20 +181,12 @@ class Model(BaseModel):
 
     def _build_log_py_xw(self) -> tf.Tensor:
         if self.stub == "regression":
-            return self.learn.log_py_xw
+            # return self.learn.log_py_xw
+            return tf.reduce_sum(self.learn.log_py_xw)
         elif self.stub == "ird":
-            output = tf.squeeze(self.get_train_output(), axis=2)  # Expecting the wrong dimesnions./
-            loss_scalar = self.problem.build_data_loss(output,
+            output = self.get_train_output()
+            loss = self.problem.build_data_loss(output,
                     l1_loss=0.0, l2_loss=0.0)
-            # What we actually need, I claim, is loss unreduced. Because the
-            # algorithm expects loss separated by n_particles.
-            #
-            # Thinking about this out loud, I realize that it might just
-            # be easier to reduce regression loss in this function instead.
-            #
-            # I'll have to first look at the reduction logic inside r/train.py.
-            loss = tf.expand_dims(loss_scalar, 0)
-            loss = tf.expand_dims(loss, 0)
             return -loss
         else:
             raise ValueError(self.problem.stupid_stub)
@@ -244,8 +236,10 @@ class Model(BaseModel):
         """
         qws = [self.learn.qws['w' + str(i)].tensor
                 for i in range(len(self.learn.qws))]
-        w_grads = tf.gradients(tf.reduce_sum(
-            tf.reduce_mean(self._log_py_xw, 1), 0), qws)
+        # w_grads = tf.gradients(tf.reduce_sum(
+        #     tf.reduce_mean(self._log_py_xw, 1), 0), qws)
+        n_batches = tf.cast(tf.shape(self.inputs)[0], tf.float32)
+        w_grads = tf.gradients(self._log_py_xw / n_batches, qws)
 
         activations = [get_collection("a0"), get_collection("a1")]
         activations = [tf.concat(
@@ -261,20 +255,14 @@ class Model(BaseModel):
             else:
                 # Empirical fisher: sample model from var distribution, setting
                 # y = target.
-                s_grads = tf.gradients(tf.reduce_sum(self._log_py_xw), s)
+                s_grads = tf.gradients(self._log_py_xw, s)
         elif self.stub == "ird":
             assert self.config.true_fisher, "Only true fisher supported"
             # Sample model and y from the var. distribution.
-            # (Yes, this is true fisher even though in regression case this
-            # is the empiral fisher).
+            # (Yes, _log_py_xw holds true fisher even though in regression case
+            # this is the empiral fisher).
             s_grads = [tf.check_numerics(x, "ird s_grads")
-                for x in tf.gradients(tf.reduce_sum(self._log_py_xw), s)]
-            # XXX: Returning [None, None} right now, indicating a disconnected
-            # graph. In particular, s is not connected to self._log_py_wx.
-            # I think this means that I'm building the graph twice?
-            #
-            # I should make sure somehow that I don't build self._log_py_xw
-            # after s.
+                for x in tf.gradients(self._log_py_xw, s)]
 
         weight_updates = []
         scale_updates = []

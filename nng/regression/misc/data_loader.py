@@ -42,13 +42,15 @@ def generate_data_loader(config, seed=0, delimiter=None, dtype=np.float32
     train_loader = DataLoader(trainset,
                               batch_size=config.batch_size,
                               shuffle=True,
-                              num_workers=config.num_workers)
+                              num_workers=config.num_workers,
+                              drop_last=True)
 
     testset = RegressionDataset(x_test.astype(dtype), y_test.astype(dtype))
     test_loader = DataLoader(testset,
                              batch_size=config.test_batch_size,
                              shuffle=True,
-                             num_workers=config.num_workers)
+                             num_workers=config.num_workers,
+                             drop_last=False)
     assert np.all(trainset.input_dim == testset.input_dim)
 
     return train_loader, test_loader, std_y_train, trainset.input_dim
