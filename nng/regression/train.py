@@ -142,6 +142,10 @@ class Trainer(BaseTrain):
             rmse_list.append(rmse)
             ll_list.append(ll)
 
+        if len(lb_list) == 0:
+            self.logger.info("No data to evaluate in test_epoch.")
+            return
+
         average_lb = np.mean(lb_list)
         average_rmse = np.mean(rmse_list)
         average_ll = np.mean(ll_list)
