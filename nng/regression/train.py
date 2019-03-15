@@ -163,6 +163,18 @@ class Trainer(BaseTrain):
     def get_result(self):
         return self.test_epoch()
 
+    def sample_outputs(self, feat, n_samples):
+        fd = { self.model.inputs: feat,
+               self.model.n_particles: n_samples,}
+        return self.sess.run(self.model.h_pred, feed_dict=fd)
+
+    def sample_test_rewards(self, feat, n_samples):
+        assert self.model.stub == "ird"
+        fd = self.model.problem.test_fd(feat)
+        fd[self.model.n_particles] = n_samples
+        fetches = [self.model._bnn, self.model._main]
+        return self.sess.run(fetches, feed_dict=fd)
+
 
 class _DataLoaderIterWrapped:
     def __init__(self, data_loader: Iterable, trainer: Trainer):

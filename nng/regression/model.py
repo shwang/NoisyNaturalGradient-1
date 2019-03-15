@@ -5,6 +5,7 @@ import typing
 from typing import Iterable, List, Optional, Tuple, Sequence
 
 import tensorflow as tf
+from tensorflow.contrib.framework import with_shape
 
 from nng.core.base_model import BaseModel
 from nng.misc.registry import get_model
@@ -52,7 +53,8 @@ class Model(BaseModel):
 
         # Initialize attributes.
         if n_particles_ph is None:
-            self.n_particles = tf.placeholder(tf.int32)
+            self.n_particles = tf.placeholder(tf.int32, shape=[],
+                    name="n_particles")
         else:
             self.n_particles = n_particles_ph
 
@@ -118,19 +120,21 @@ class Model(BaseModel):
         else:
             raise ValueError(self.layer_type)
 
-        self.h_pred = self.learn.h_pred
+        self.h_pred = tf.squeeze(self.learn.h_pred, 2)
         if self.stub == "ird":
-            self._main, self._aux, self._bnn = \
+            main_raw, _, self._bnn = \
                     self.problem.gather_standard_rewards(self.h_pred)
+            self._main = tf.reshape(main_raw, [self.n_particles, -1])
         else:
             self._main = self._aux = self._bnn = None
 
         self._log_py_xw = self._build_log_py_xw()
         self.kl = tf.check_numerics(self.learn.build_kl(), "kl")
         self.loss_prec = self._build_loss_prec()
-        self.lower_bound = self._build_lower_bound()
 
-        self.mean_log_py_xw = self._log_py_xw
+        n_data = tf.cast(tf.shape(self.inputs)[0] * self.n_particles, tf.float32)
+        self.mean_log_py_xw = self._log_py_xw / n_data
+        self.lower_bound = self._build_lower_bound()
         self.rmse = self.learn.rmse
         self.ll = self.learn.log_likelihood
 
@@ -141,18 +145,6 @@ class Model(BaseModel):
                 self._build_layer_update_ops(layers)
         prec_op = self._build_prec_op()
         self.train_op = tf.group([weight_update_op, prec_op], name="train_op")
-
-    def sample_outputs(self, feat, n_samples):
-        fd = { self.model.inputs: feat,
-               self.model.n_particles: n_samples,}
-        return self.sess.run(self.model.h_pred, feed_dict=fd)
-
-    def sample_test_rewards(self, feat, n_samples):
-        assert self.stub == "ird"
-        fd = self.model.problem.test_fd()
-        fd[self.model.n_particles] = n_samples
-        fetches = [self.model._bnn, self.model._main]
-        return self.sess.run(fetches, feed_dict=fd)
 
     def get_train_output(self) -> tf.Tensor:
         """
@@ -202,15 +194,13 @@ class Model(BaseModel):
         # alpha_ = tf.exp(log_alpha)
         # beta_ = tf.exp(log_beta)
         y_obs = tf.tile(tf.expand_dims(self.targets, 0), [self.n_particles, 1])
-        h_pred = tf.squeeze(self.learn.h_pred, 2)
-        loss_prec = 0.5 * (tf.stop_gradient(tf.reduce_mean((y_obs - h_pred) ** 2)) *
+        loss_prec = 0.5 * (tf.stop_gradient(tf.reduce_mean((y_obs - self.h_pred) ** 2)) *
                            alpha_ / beta_ - (tf.digamma(alpha_) - tf.log(beta_ + 1e-10)))
         return loss_prec
 
     def _build_lower_bound(self) -> tf.Tensor:
-        lower_bound = tf.reduce_mean(
-                self._log_py_xw - \
-                self.config.kl * self.kl / self.n_data)
+        lower_bound = with_shape([],
+                self.mean_log_py_xw - self.config.kl * self.kl / self.n_data)
         lower_bound = lower_bound - tf.reduce_mean(self.loss_prec)
 
         return tf.check_numerics(lower_bound, "lb")
