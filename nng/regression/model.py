@@ -92,33 +92,30 @@ class Model(BaseModel):
 
         outsample_cls = NormalOutSample if self.stub == "regression" else None
         if self.layer_type == "emvg":
-            self.learn = BayesianLearning(
-                    layer_sizes=[self.inputs.shape[-1], num_hidden, 1],
-                    layer_types=[EMVGLayer] * 2,
-                    layer_params=[{}] * 2,
-                    out_params={},
-                    activation_fn=tf.nn.relu,
-                    outsample_cls=outsample_cls,
-                    x=self.inputs,
-                    y=self.targets,
-                    n_particles=self.n_particles,
-                    std_y_train=self.config.std_train,
-                    stub=self.stub)
+            layer_cls = EMVGLayer
+            default_hid_sizes = [50]
         elif self.layer_type == "mvg":
-            self.learn = BayesianLearning(
-                    layer_sizes=[self.inputs.shape[-1], 50, 1],
-                    layer_types=[MVGLayer] * 2,
-                    layer_params=[{}] * 2,
-                    out_params={},
-                    activation_fn=tf.nn.relu,
-                    outsample_cls=outsample_cls,
-                    x=self.inputs,
-                    y=self.targets,
-                    n_particles=self.n_particles,
-                    std_y_train=self.config.std_train,
-                    stub=self.stub)
-        else:
-            raise ValueError(self.layer_type)
+            layer_cls = MVGLayer
+            default_hid_sizes = [num_hidden]
+
+        hidden_sizes = self.config.get("hidden_sizes", None) or default_hid_sizes
+        layer_sizes = [self.inputs.shape[-1]] + hidden_sizes + [1]
+        self.n_layers = len(hidden_sizes) + 1
+        layer_types = [layer_cls] * self.n_layers
+        layer_params = [{}] * self.n_layers
+
+        self.learn = BayesianLearning(
+                layer_sizes=layer_sizes,
+                layer_types=layer_types,
+                layer_params=layer_params,
+                out_params={},
+                activation_fn=tf.nn.relu,
+                outsample_cls=outsample_cls,
+                x=self.inputs,
+                y=self.targets,
+                n_particles=self.n_particles,
+                std_y_train=self.config.std_train,
+                stub=self.stub)
 
         self.h_pred = tf.squeeze(self.learn.h_pred, 2)
         if self.stub == "ird":

@@ -31,9 +31,10 @@ class BayesianNetwork(object):
         """
         super(BayesianNetwork, self).__init__()
         self.stub = stub
+        n_layers = len(layer_sizes)
         self._layer_sizes = layer_sizes
         self._layer_types = layer_types
-        self._layer_params = layer_params
+        self._layer_params = layer_params or [{}] * n_layers
         self._out_params = out_params
         self._activation_fn = activation_fn
         self.layers = []
