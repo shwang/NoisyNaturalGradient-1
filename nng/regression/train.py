@@ -32,7 +32,7 @@ class Trainer(BaseTrain):
             self.sess.run(self.model.init_ops)
 
         for cur_epoch in range(self.config.epoch):
-            print('epoch: {}'.format(int(cur_epoch)))
+            self.logger.info('epoch: {}'.format(int(cur_epoch)))
             self.train_epoch()
 
             if cur_epoch % self.config.get("epoch_rate", 10) == 0:
@@ -99,7 +99,7 @@ class Trainer(BaseTrain):
         average_kl = np.mean(kl_list)
         average_loss_prec = np.mean(loss_prec_list)
 
-        print("train | Lower Bound: %5.6f | log_py_wx: %5.6f | "
+        self.logger.info("train | Lower Bound: %5.6f | log_py_wx: %5.6f | "
                          "KL: %5.6f | loss prec: %5.6f" % (float(average_lb),
                                                float(average_log_py_xw),
                                                float(average_kl),
@@ -145,7 +145,7 @@ class Trainer(BaseTrain):
         average_lb = np.mean(lb_list)
         average_rmse = np.mean(rmse_list)
         average_ll = np.mean(ll_list)
-        print("test | Lower Bound: %5.6f | RMSE: %5.6f | "
+        self.logger.info("test | Lower Bound: %5.6f | RMSE: %5.6f | "
                          "Log Likelihood : %5.6f" % (float(average_lb), float(average_rmse), float(average_ll)))
 
         # Summarize
