@@ -138,8 +138,6 @@ class Model(BaseModel):
         self.rmse = self.learn.rmse
         self.ll = self.learn.log_likelihood
 
-        optimizer = tf.train.AdamOptimizer(self.config.learning_rate)
-
         self.init_ops = tf.group(init_ops) if init_ops != [] else None
         weight_update_op, self.basis_update_op, self.scale_update_op = \
                 self._build_layer_update_ops(layers)
