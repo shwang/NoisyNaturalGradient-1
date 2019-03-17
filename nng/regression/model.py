@@ -80,15 +80,6 @@ class Model(BaseModel):
     def _build_model(self):
         net = get_model(self.config.model_name)
 
-        layers, init_ops, num_hidden = net(self.layer_type,
-                                           int(self.inputs.shape[-1]),
-                                           self.n_data,
-                                           self.config.kl,
-                                           self.config.eta,
-                                           self.alpha,
-                                           self.beta,
-                                           self.config.damping,
-                                           self.omega)
 
         outsample_cls = NormalOutSample if self.stub == "regression" else None
         if self.layer_type == "emvg":
@@ -96,13 +87,25 @@ class Model(BaseModel):
             default_hid_sizes = [50]
         elif self.layer_type == "mvg":
             layer_cls = MVGLayer
-            default_hid_sizes = [num_hidden]
+            default_hid_sizes = [50]
 
         hidden_sizes = self.config.get("hidden_sizes", None) or default_hid_sizes
-        layer_sizes = [self.inputs.shape[-1]] + hidden_sizes + [1]
-        self.n_layers = len(hidden_sizes) + 1
+        layer_sizes = [int(self.inputs.shape[-1])] + hidden_sizes + [1]
+        self.n_layers = len(layer_sizes) - 1
         layer_types = [layer_cls] * self.n_layers
         layer_params = [{}] * self.n_layers
+
+        print(layer_sizes)
+        layers, init_ops = net(layer_type=self.layer_type,
+                                           input_size=int(self.inputs.shape[-1]),
+                                           num_data=self.n_data,
+                                           kl_factor=self.config.kl,
+                                           ita=self.config.eta,
+                                           alpha=self.alpha,
+                                           beta=self.beta,
+                                           damp=self.config.damping,
+                                           omega=self.omega,
+                                           layer_sizes=layer_sizes)
 
         self.learn = BayesianLearning(
                 layer_sizes=layer_sizes,

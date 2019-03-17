@@ -1,11 +1,12 @@
 from __future__ import absolute_import
 from __future__ import print_function
 from __future__ import division
+from abc import ABC, abstractmethod
 
 import tensorflow as tf
 
 
-class NGOptimizer(object):
+class NGOptimizer(ABC):
     def __init__(self, shape, N, lam, alpha, beta, w_name):
         self.shape = shape
         self.N = N
@@ -14,5 +15,10 @@ class NGOptimizer(object):
         self.beta = beta
         self.w_name = w_name
 
+    @abstractmethod
     def update(self, w, w_grad, a, s_grad):
-        raise NotImplementedError()
+        pass
+
+    @abstractmethod
+    def push_collection(self, add_summary=True):
+        pass

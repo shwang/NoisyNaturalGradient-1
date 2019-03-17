@@ -4,6 +4,7 @@ from __future__ import division
 
 import tensorflow as tf
 
+from nng.regression.misc.collections import add_to_collection
 from nng.regression.ops.ng_optimizer import NGOptimizer
 
 
@@ -18,6 +19,12 @@ class MVGOptimizer(NGOptimizer):
         self.damp = damp
         self._init_bias_corr()
         self._init_momentum()
+
+
+    def push_collection(self, add_summary=True):
+        add_to_collection(self.w_name + '_q_mean', self.mu)
+        add_to_collection(self.w_name + '_q_u', self.u)
+        add_to_collection(self.w_name + '_q_v', self.v)
 
     def _init_mu(self, mu):
         if mu is None:

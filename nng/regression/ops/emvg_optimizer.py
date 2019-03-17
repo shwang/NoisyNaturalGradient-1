@@ -4,6 +4,7 @@ from __future__ import division
 
 import tensorflow as tf
 
+from nng.regression.misc.collections import add_to_collection
 from nng.regression.ops.ng_optimizer import NGOptimizer
 
 
@@ -22,6 +23,15 @@ class EMVGOptimizer(NGOptimizer):
         self.omega = omega
         if self.omega is None:
             self.omega = self.beta
+
+    def push_collection(self, add_summary=True):
+        add_to_collection(self.w_name + '_q_mean', self.mu)
+        add_to_collection(self.w_name + '_q_u_b', self.u_b)
+        add_to_collection(self.w_name + '_q_v_b', self.v_b)
+        add_to_collection(self.w_name + '_q_r', self.r)
+        if add_summary:
+            tf.summary.scalar(self.w_name + '_q_mean', tf.reduce_mean(self.mu))
+
 
     def _init_r(self, r):
         if r is None:
