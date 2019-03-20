@@ -32,7 +32,7 @@ def ffn(layer_type, input_size, num_data, kl_factor, ita, alpha, beta, damp,
         layers.append(layer)
         layer.push_collection()
         if layer_type == "emvg":
-            init_ops.append(layer.init_r_kfac())
+            init_ops.append(layer.init_r_kfac())  # pytype: disable=attribute-error
 
     # if layer_type == "emvg":
     #     layer1 = emvg_optimizer.EMVGOptimizer([input_size + 1, num_hidden],

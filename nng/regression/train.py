@@ -32,8 +32,9 @@ class Trainer(BaseTrain):
             self.sess.run(self.model.init_ops)
 
         for cur_epoch in range(self.config.epoch):
-            self.logger.info('epoch: {}'.format(int(cur_epoch)))
-            self.train_epoch()
+            if cur_epoch % self.config.get("verbose_interval", 5) == 0:
+                self.logger.info('epoch: {}'.format(int(cur_epoch)))
+            self.train_epoch(cur_epoch)
 
             if cur_epoch % self.config.get("epoch_rate", 10) == 0:
                 self.test_epoch()
@@ -47,7 +48,8 @@ class Trainer(BaseTrain):
                 self.beta = decay_ratio * self.beta
                 self.omega = decay_ratio * self.omega
 
-    def train_epoch(self):
+
+    def train_epoch(self, cur_epoch):
         lb_lst = []
         log_py_xw_list = []
         kl_list = []
@@ -84,7 +86,6 @@ class Trainer(BaseTrain):
             if self.model.scale_update_op is not None:
                 self.sess.run([self.model.scale_update_op], feed_dict=feed_dict)
 
-            m = self.model
             lb, log_py_xw, kl, loss_prec = self.sess.run(
                     [self.model.lower_bound, self.model.mean_log_py_xw,
                         self.model.kl, self.model.loss_prec],
@@ -99,7 +100,8 @@ class Trainer(BaseTrain):
         average_kl = np.mean(kl_list)
         average_loss_prec = np.mean(loss_prec_list)
 
-        self.logger.info("train | Lower Bound: %5.6f | log_py_wx: %5.6f | "
+        if cur_epoch % self.config.get("verbose_interval", 5) == 0:
+            self.logger.info("train | Lower Bound: %5.6f | log_py_wx: %5.6f | "
                          "KL: %5.6f | loss prec: %5.6f" % (float(average_lb),
                                                float(average_log_py_xw),
                                                float(average_kl),
@@ -143,7 +145,7 @@ class Trainer(BaseTrain):
             ll_list.append(ll)
 
         if len(lb_list) == 0:
-            self.logger.info("No data to evaluate in test_epoch.")
+            self.logger.debug("No data to evaluate in test_epoch.")
             return
 
         average_lb = np.mean(lb_list)

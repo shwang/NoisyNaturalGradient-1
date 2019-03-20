@@ -1,8 +1,8 @@
 from __future__ import absolute_import
 from __future__ import print_function
 from __future__ import division
-import typing
-from typing import Iterable, List, Optional, Tuple, Sequence
+import logging
+from typing import Iterable, List, Optional, Tuple, Sequence, TYPE_CHECKING
 
 import tensorflow as tf
 from tensorflow.contrib.framework import with_shape
@@ -14,7 +14,7 @@ from nng.regression.misc.layers import *
 from nng.regression.controller.sample import NormalOutSample
 from nng.regression.network.ffn import *
 
-if typing.TYPE_CHECKING:
+if TYPE_CHECKING:
     from irdplus.bnn.problem.problem import Problem
 
 
@@ -49,6 +49,7 @@ class Model(BaseModel):
             self.layer_type = None
         self.input_dim = input_dim  # type: List[int]
         self.n_data = n_data  # type: int
+        logging.info("model.n_data =", n_data)
         self.problem = problem
 
         # Initialize attributes.
@@ -84,12 +85,10 @@ class Model(BaseModel):
         outsample_cls = NormalOutSample if self.stub == "regression" else None
         if self.layer_type == "emvg":
             layer_cls = EMVGLayer
-            default_hid_sizes = [50]
         elif self.layer_type == "mvg":
             layer_cls = MVGLayer
-            default_hid_sizes = [50]
 
-        hidden_sizes = self.config.get("hidden_sizes", None) or default_hid_sizes
+        hidden_sizes = self.config.get("hidden_sizes", None) or [50]
         layer_sizes = [int(self.inputs.shape[-1])] + hidden_sizes + [1]
         self.n_layers = len(layer_sizes) - 1
         layer_types = [layer_cls] * self.n_layers
