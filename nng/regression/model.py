@@ -12,7 +12,7 @@ from nng.misc.registry import get_model
 from nng.regression.controller.bayesian_learning import BayesianLearning
 from nng.regression.misc.layers import *
 from nng.regression.controller.sample import NormalOutSample
-from nng.regression.network.ffn import *
+import nng.regression.network.ffn as ffn
 
 if TYPE_CHECKING:
     from irdplus.bnn.problem.problem import Problem
@@ -49,7 +49,7 @@ class Model(BaseModel):
             self.layer_type = None
         self.input_dim = input_dim  # type: List[int]
         self.n_data = n_data  # type: int
-        logging.info("model.n_data =", n_data)
+        logging.info("model.n_data = {}".format(n_data))
         self.problem = problem
 
         # Initialize attributes.
@@ -79,23 +79,28 @@ class Model(BaseModel):
         self.init_saver()
 
     def _build_model(self):
-        net = get_model(self.config.model_name)
-
-
         outsample_cls = NormalOutSample if self.stub == "regression" else None
         if self.layer_type == "emvg":
             layer_cls = EMVGLayer
         elif self.layer_type == "mvg":
             layer_cls = MVGLayer
 
-        hidden_sizes = self.config.get("hidden_sizes", None) or [50]
+        if self.config.model_name == "ffn50":
+            default_hidden_size = 50
+        elif self.config.model_name == "ffn100":
+            default_hidden_size = 100
+        else:
+            raise ValueError(default_hidden_size)
+
+        hidden_sizes = self.config.get("hidden_sizes", None) or \
+                [default_hidden_size]
         layer_sizes = [int(self.inputs.shape[-1])] + hidden_sizes + [1]
         self.n_layers = len(layer_sizes) - 1
         layer_types = [layer_cls] * self.n_layers
         layer_params = [{}] * self.n_layers
 
         print(layer_sizes)
-        layers, init_ops = net(layer_type=self.layer_type,
+        layers, init_ops = ffn.ffn(layer_type=self.layer_type,
                                            input_size=int(self.inputs.shape[-1]),
                                            num_data=self.n_data,
                                            kl_factor=self.config.kl,
@@ -131,8 +136,8 @@ class Model(BaseModel):
         self.kl = tf.check_numerics(self.learn.build_kl(), "kl")
         self.loss_prec = self._build_loss_prec()
 
-        n_data = tf.cast(tf.shape(self.inputs)[0] * self.n_particles, tf.float32)
-        self.mean_log_py_xw = self._log_py_xw / n_data
+        n_outputs = tf.cast(tf.shape(self.inputs)[0] * self.n_particles, tf.float32)
+        self.mean_log_py_xw = self._log_py_xw / n_outputs
         self.lower_bound = self._build_lower_bound()
         self.rmse = self.learn.rmse
         self.ll = self.learn.log_likelihood
@@ -196,6 +201,10 @@ class Model(BaseModel):
         return loss_prec
 
     def _build_lower_bound(self) -> tf.Tensor:
+        """
+        Note that this Tensor is only used for logging, not visualization.
+        A better name for it would be mean_lower_bound.
+        """
         lower_bound = with_shape([],
                 self.mean_log_py_xw - self.config.kl * self.kl / self.n_data)
         lower_bound = lower_bound - tf.reduce_mean(self.loss_prec)

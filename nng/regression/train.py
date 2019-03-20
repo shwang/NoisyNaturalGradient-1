@@ -1,9 +1,10 @@
 from __future__ import absolute_import
 from __future__ import print_function
 from __future__ import division
-from typing import Dict, Iterable
+from typing import Callable, Dict, Iterable, Optional
 
 import numpy as np
+import tensorflow as tf
 
 from nng.core.base_train import BaseTrain
 
@@ -11,10 +12,11 @@ from nng.core.base_train import BaseTrain
 class Trainer(BaseTrain):
     train_loader = ...  # type: Iterable[Dict]
     test_loader = ...  # type: Iterable[Dict]
+    hook = ...  # type: Optional[Callable]
 
     def __init__(self, sess, model,
             train_loader: Iterable[Dict], test_loader: Iterable,
-            config, logger):
+            config, logger, *, hook=None):
         super(Trainer, self).__init__(sess, model, config, logger)
         if self.model.stub == "regression":
             self.train_loader = _DataLoaderIterWrapped(train_loader, self)
@@ -26,12 +28,16 @@ class Trainer(BaseTrain):
         self.alpha = self.model.config.alpha
         self.beta = self.model.config.beta
         self.omega = self.model.config.omega
+        self.hook = hook
+        self._incr_step = tf.assign_add(self.model.global_step_tensor, 1)  # type: tf.Operation
 
     def train(self):
         if self.model.init_ops is not None:
             self.sess.run(self.model.init_ops)
 
         for cur_epoch in range(self.config.epoch):
+            if self.hook:
+                self.hook(epoch=cur_epoch, final=False)
             if cur_epoch % self.config.get("verbose_interval", 5) == 0:
                 self.logger.info('epoch: {}'.format(int(cur_epoch)))
             self.train_epoch(cur_epoch)
@@ -48,6 +54,8 @@ class Trainer(BaseTrain):
                 self.beta = decay_ratio * self.beta
                 self.omega = decay_ratio * self.omega
 
+        if self.hook:
+            self.hook(epoch=cur_epoch, final=True)
 
     def train_epoch(self, cur_epoch):
         lb_lst = []
@@ -94,6 +102,8 @@ class Trainer(BaseTrain):
             log_py_xw_list.append(log_py_xw)
             kl_list.append(kl)
             loss_prec_list.append(loss_prec)
+
+            self.sess.run(self._incr_step)
 
         average_lb = np.mean(lb_lst)
         average_log_py_xw = np.mean(log_py_xw_list)
