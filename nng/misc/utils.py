@@ -36,7 +36,7 @@ def makedirs(filename):
 
 
 def get_logger(name, logpath, filepath, package_files=[],
-               displaying=True, saving=True):
+               displaying=False, saving=True):
     logger = logging.getLogger(name)
     logger.setLevel(logging.INFO)
     log_path = logpath + name + time.strftime("-%Y%m%d-%H%M%S")
