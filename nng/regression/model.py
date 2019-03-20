@@ -29,6 +29,7 @@ class Model(BaseModel):
     omega = ... # type: tf.Tensor
 
     def __init__(self, config, input_dim: Iterable[int], n_data: int, *,
+            n_batch_size: Optional[int] = None,
             n_particles_ph: Optional[tf.Tensor] = None,
             inputs_ph: Optional[tf.Tensor] = None,
             problem: "Optional[Problem]" = None):
@@ -51,6 +52,7 @@ class Model(BaseModel):
         self.n_data = n_data  # type: int
         logging.info("model.n_data = {}".format(n_data))
         self.problem = problem
+        self.n_batch_size = n_batch_size  # Forced inverse scaling factor for w_grads.
 
         # Initialize attributes.
         if n_particles_ph is None:
@@ -234,7 +236,10 @@ class Model(BaseModel):
                 for i in range(len(self.learn.qws))]
         # w_grads = tf.gradients(tf.reduce_sum(
         #     tf.reduce_mean(self._log_py_xw, 1), 0), qws)
-        n_batches = tf.cast(tf.shape(self.inputs)[0], tf.float32)
+
+        # NOTE: _log_py_xw is a scalar.
+        n_batches = self.n_batch_size or tf.cast(
+                tf.shape(self.inputs)[0], tf.float32)
         w_grads = tf.gradients(self._log_py_xw / n_batches, qws)
 
         activations = [get_collection("a0"), get_collection("a1")]
