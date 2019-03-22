@@ -1,17 +1,18 @@
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
+import logging
 
 import tensorflow as tf
 
 
 class BaseModel:
     """ An abstract class for models. Children include models for classification and regression."""
-    def __init__(self, config):
+    def __init__(self, config, logger=logging.getLogger("root")):
         self.config = config
         self.global_step_tensor = None
-        # Init the global step.
         self.init_global_step()
+        self.logger = logger
         self.saver = None
 
     def save(self, sess):
@@ -19,9 +20,9 @@ class BaseModel:
         :param sess: TensorFlow Session
         :return: None
         """
-        print("Saving model...")
+        self.logger.info("Saving model...")
         self.saver.save(sess, self.config.checkpoint_dir, self.global_step_tensor)
-        print("Model saved")
+        self.logger.debug("Model saved")
 
     def load(self, sess):
         """ Loads latest checkpoint from the experiment path defined in the config file.
@@ -30,9 +31,10 @@ class BaseModel:
         """
         latest_checkpoint = tf.train.latest_checkpoint(self.config.checkpoint_dir)
         if latest_checkpoint:
-            print("Loading model checkpoint {} ...\n".format(latest_checkpoint))
+            self.logger.info(
+                    "Loading model checkpoint {} ...\n".format(latest_checkpoint))
             self.saver.restore(sess, latest_checkpoint)
-            print("Model loaded")
+            self.logger.debug("Model loaded")
 
     def init_global_step(self):
         """ Initialize a TensorFlow variable to use it as a global step counter.
