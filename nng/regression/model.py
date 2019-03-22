@@ -94,7 +94,7 @@ class Model(BaseModel):
         elif self.config.model_name == "ffn100":
             default_hidden_size = 100
         else:
-            raise ValueError(default_hidden_size)
+            raise ValueError(self.config.model_name)
 
         hidden_sizes = self.config.get("hidden_sizes", None) or \
                 [default_hidden_size]
