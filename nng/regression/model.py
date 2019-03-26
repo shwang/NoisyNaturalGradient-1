@@ -1,7 +1,6 @@
 from __future__ import absolute_import
 from __future__ import print_function
 from __future__ import division
-import logging
 from typing import Iterable, List, Optional, Tuple, Sequence, TYPE_CHECKING
 
 import tensorflow as tf
@@ -29,6 +28,8 @@ class Model(BaseModel):
     omega = ... # type: tf.Tensor
 
     def __init__(self, config, input_dim: Iterable[int], n_data: int, *,
+            logger,
+            n_batch_size: Optional[int] = None,
             n_particles_ph: Optional[tf.Tensor] = None,
             inputs_ph: Optional[tf.Tensor] = None,
             problem: "Optional[Problem]" = None):
@@ -37,20 +38,23 @@ class Model(BaseModel):
         :param input_dim: int
         :param n_data: int
         """
-        super().__init__(config)
+        super().__init__(config, logger)
         # Set the approximation type specifically.
         if config.optimizer == "ekfac":
+            self.logger.info("[!] Optimizer: eKFAC")
             self.layer_type = "emvg"
         elif config.optimizer == "kfac":
-            print("[!] Optimizer: KFAC")
+            self.logger.info("[!] Optimizer: KFAC")
             self.layer_type = "mvg"
         else:
-            print("[!] Optimizer: {}".format(config.optimizer))
+            self.logger.info("[!] Optimizer: {}".format(config.optimizer))
             self.layer_type = None
         self.input_dim = input_dim  # type: List[int]
         self.n_data = n_data  # type: int
-        logging.info("model.n_data = {}".format(n_data))
+        self.logger = logger
+        self.logger.info("model.n_data = {}".format(n_data))
         self.problem = problem
+        self.n_batch_size = n_batch_size  # Forced inverse scaling factor for w_grads.
 
         # Initialize attributes.
         if n_particles_ph is None:
@@ -90,7 +94,7 @@ class Model(BaseModel):
         elif self.config.model_name == "ffn100":
             default_hidden_size = 100
         else:
-            raise ValueError(default_hidden_size)
+            raise ValueError(self.config.model_name)
 
         hidden_sizes = self.config.get("hidden_sizes", None) or \
                 [default_hidden_size]
@@ -99,7 +103,7 @@ class Model(BaseModel):
         layer_types = [layer_cls] * self.n_layers
         layer_params = [{}] * self.n_layers
 
-        print(layer_sizes)
+        self.logger.info("layer_sizes: {}".format(layer_sizes))
         layers, init_ops = ffn.ffn(layer_type=self.layer_type,
                                            input_size=int(self.inputs.shape[-1]),
                                            num_data=self.n_data,
@@ -234,7 +238,10 @@ class Model(BaseModel):
                 for i in range(len(self.learn.qws))]
         # w_grads = tf.gradients(tf.reduce_sum(
         #     tf.reduce_mean(self._log_py_xw, 1), 0), qws)
-        n_batches = tf.cast(tf.shape(self.inputs)[0], tf.float32)
+
+        # NOTE: _log_py_xw is a scalar.
+        n_batches = self.n_batch_size or tf.cast(
+                tf.shape(self.inputs)[0], tf.float32)
         w_grads = tf.gradients(self._log_py_xw / n_batches, qws)
 
         activations = [get_collection("a0"), get_collection("a1")]
