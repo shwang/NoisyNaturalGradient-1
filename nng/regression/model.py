@@ -96,8 +96,9 @@ class Model(BaseModel):
         else:
             raise ValueError(self.config.model_name)
 
-        hidden_sizes = self.config.get("hidden_sizes", None) or \
-                [default_hidden_size]
+        hidden_sizes = self.config.get("hidden_sizes", None)
+        if hidden_sizes is None:
+            hidden_sizes = [default_hidden_size]
         layer_sizes = [int(self.inputs.shape[-1])] + hidden_sizes + [1]
         self.n_layers = len(layer_sizes) - 1
         layer_types = [layer_cls] * self.n_layers
