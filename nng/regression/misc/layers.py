@@ -10,11 +10,9 @@ from nng.regression.misc.kl_utils import *
 from nng.regression.controller.distributions import *
 
 
-def _append_homog(tensor):
-    rank = len(tensor.shape.as_list())
-    shape = tf.concat([tf.shape(tensor)[:-1], [1]], axis=0)
-    ones = tf.ones(shape, dtype=tensor.dtype)
-    return tf.concat([tensor, ones], axis=rank - 1)
+def append_homog(x: tf.Tensor) -> tf.Tensor:
+    ones = tf.ones(tf.concat([tf.shape(x)[:-1], [1]], axis=0))
+    return tf.concat([x, ones], axis=-1)
 
 
 class Layer(object):
