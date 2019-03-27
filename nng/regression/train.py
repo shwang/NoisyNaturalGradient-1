@@ -1,7 +1,7 @@
 from __future__ import absolute_import
 from __future__ import print_function
 from __future__ import division
-from typing import Callable, Dict, Iterable, Optional
+from typing import Callable, Dict, Iterable, Optional, Tuple
 
 import numpy as np
 import tensorflow as tf
@@ -15,7 +15,7 @@ class Trainer(BaseTrain):
     hook = ...  # type: Optional[Callable]
 
     def __init__(self, sess, model,
-            train_loader: Iterable[Dict], test_loader: Iterable,
+            train_loader: Iterable, test_loader: Iterable,
             config, logger, *, hook=None):
         super(Trainer, self).__init__(sess, model, config, logger)
         if self.model.stub == "regression":
@@ -132,7 +132,7 @@ class Trainer(BaseTrain):
         if self.model.stub == "regression":
             self.train_loader.data_loader.dataset.permute(0)  # pytype: disable=attribute-error
 
-    def test_epoch(self):
+    def test_epoch(self) -> Tuple[float, float]:
         lb_list = []
         rmse_list = []
         ll_list = []
@@ -156,7 +156,7 @@ class Trainer(BaseTrain):
 
         if len(lb_list) == 0:
             self.logger.debug("No data to evaluate in test_epoch.")
-            return
+            return np.nan, np.nan
 
         average_lb = np.mean(lb_list)
         average_rmse = np.mean(rmse_list)
@@ -176,7 +176,7 @@ class Trainer(BaseTrain):
 
         return average_rmse, average_ll
 
-    def get_result(self):
+    def get_result(self) -> Tuple[float, float]:
         return self.test_epoch()
 
     def sample_outputs(self, feat, n_samples):

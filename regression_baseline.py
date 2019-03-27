@@ -16,14 +16,9 @@ from nng.regression.model import Model as RegressionModel
 def main():
     tf.set_random_seed(1231)
     np.random.seed(1231)
-
-    config = None
     try:
         args = get_args()
         config = process_config(args.config)
-
-        if config is None:
-            raise Exception()
     except:
         print("Add a config file using \'--config file_name.json\'")
         exit(1)
