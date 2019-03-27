@@ -9,7 +9,8 @@ from tensorflow.contrib.framework import with_shape
 from nng.core.base_model import BaseModel
 from nng.misc.registry import get_model
 from nng.regression.controller.bayesian_learning import BayesianLearning
-from nng.regression.misc.layers import *
+from nng.regression.misc.collections import get_collection
+from nng.regression.misc.layers import append_homog, EMVGLayer, MVGLayer
 from nng.regression.controller.sample import NormalOutSample
 import nng.regression.network.ffn as ffn
 
@@ -245,9 +246,8 @@ class Model(BaseModel):
         w_grads = tf.gradients(self._log_py_xw / n_batches, qws)
 
         activations = [get_collection("a0"), get_collection("a1")]
-        activations = [tf.concat(
-            [activation,
-             tf.ones(tf.concat([tf.shape(activation)[:-1], [1]], axis=0))], axis=-1) for activation in activations]
+        activations = [append_homog(activation)
+                       for activation in activations]
 
         s = [get_collection("s0"), get_collection("s1")]
         if self.stub == "regression":
