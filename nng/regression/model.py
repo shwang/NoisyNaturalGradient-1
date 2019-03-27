@@ -9,7 +9,8 @@ from tensorflow.contrib.framework import with_shape
 from nng.core.base_model import BaseModel
 from nng.misc.registry import get_model
 from nng.regression.controller.bayesian_learning import BayesianLearning
-from nng.regression.misc.collections import get_collection
+from nng.regression.misc.collections import (
+    get_collection, get_layer_input_activations, get_layer_outputs)
 from nng.regression.misc.layers import append_homog, EMVGLayer, MVGLayer
 from nng.regression.controller.sample import NormalOutSample
 import nng.regression.network.ffn as ffn
@@ -245,11 +246,12 @@ class Model(BaseModel):
                 tf.shape(self.inputs)[0], tf.float32)
         w_grads = tf.gradients(self._log_py_xw / n_batches, qws)
 
-        activations = [get_collection("a0"), get_collection("a1")]
-        activations = [append_homog(activation)
-                       for activation in activations]
+        n_layers = len(layers)
+        activations = [append_homog(a)
+                       for a in get_layer_input_activations(n_layers)]
+        s = list(get_layer_outputs(n_layers))
+        assert len(layers) == len(activations) == len(s)
 
-        s = [get_collection("s0"), get_collection("s1")]
         if self.stub == "regression":
             if self.config.true_fisher and self.stub == "regression":
                 # True fisher: sample model and y from the var. distribution.

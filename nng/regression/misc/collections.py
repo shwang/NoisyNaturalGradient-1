@@ -8,6 +8,13 @@ _FLAGS = {}
 def add_to_collection(key, value):
     _FLAGS[key] = value
 
-
 def get_collection(key):
     return _FLAGS[key]
+
+def get_layer_input_activations(n_layers):
+    for i in range(n_layers):
+        yield get_collection("a{}".format(i))
+
+def get_layer_outputs(n_layers):
+    for i in range(n_layers):
+        yield get_collection("s{}".format(i))
