@@ -25,5 +25,6 @@
   "kl": 1,
   "eta": 1,
   "train_particles": 10,
-  "test_particles": 100
+  "test_particles": 100,
+  "expected_test_ll": 7.287
 }

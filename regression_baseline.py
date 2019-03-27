@@ -13,20 +13,6 @@ from nng.regression.train import Trainer as RegressionTrainer
 from nng.regression.model import Model as RegressionModel
 
 
-_REGRESSION_INPUT_DIM = {
-    "concrete": [8],
-    "energy": [8],
-    "housing": [13],
-    "kin8nm": [8],
-    "naval": [17],
-    "power_plant": [4],
-    "protein": [9],
-    "wine": [11],
-    "yacht_hydrodynamics": [6],
-    "year_prediction": [90]
-}
-
-
 def main():
     tf.set_random_seed(1231)
     np.random.seed(1231)
@@ -46,13 +32,14 @@ def main():
     makedirs(config.checkpoint_dir)
 
     # set logger
-    path = os.path.dirname(os.path.abspath(__file__))
-    path3 = os.path.join(path, 'regression/model.py')
-    path4 = os.path.join(path, 'regression/train.py')
     logger = get_logger('log', logpath=config.summary_dir+'/',
-                        filepath=os.path.abspath(__file__), package_files=[path3, path4])
+                        filepath=os.path.abspath(__file__),
+                        package_files=[], displaying=True)
 
     logger.info(config)
+    if "expected_test_ll" in config:
+        logger.info("Expected test log likelihood = {}".format(
+            config.expected_test_ll))
 
     # Define computational graph
     rmse_results, ll_results = [], []
@@ -62,12 +49,14 @@ def main():
         sess = tf.Session()
 
         # Perform data splitting again with the provided seed.
-        train_loader, test_loader, std_train = generate_data_loader(config, seed=i)
+        train_loader, test_loader, std_train, input_dim = \
+            generate_data_loader(config, seed=i)
         config.std_train = std_train
 
         model_ = RegressionModel(config,
-                                 _REGRESSION_INPUT_DIM[config.dataset],
-                                 len(train_loader.dataset))
+                                 input_dim,
+                                 len(train_loader.dataset),
+                                 logger=logger)
         trainer = RegressionTrainer(sess, model_, train_loader, test_loader, config, logger)
 
         trainer.train()
@@ -88,9 +77,15 @@ def main():
     logger.info("Results (mean/std. errors):")
     logger.info("Test rmse = {}/{}".format(
         np.mean(rmse_results), np.std(rmse_results) / n_runs ** 0.5))
+    ll_mean, ll_std = np.mean(ll_results), np.std(ll_results)
     logger.info("Test log likelihood = {}/{}".format(
         np.mean(ll_results), np.std(ll_results) / n_runs ** 0.5))
-
+    if "expected_test_ll" in config:
+        logger.info("Expected test log likelihood = {}".format(
+            config.expected_test_ll))
+        if abs(config.expected_test_ll - ll_mean) > ll_std * 2:
+            exit(1)
+    exit(0)
 
 if __name__ == "__main__":
     main()
